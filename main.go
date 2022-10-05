@@ -151,6 +151,33 @@ func updateUser(c *gin.Context) {
 	fmt.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
 }
 
+//get one user from db and return user as json
+func getUser(c *gin.Context) {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	// Ping the primary
+	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
+		panic(err)
+	}
+	//create users
+	collection := client.Database("student").Collection("users")
+	//insert user into collection users
+	id := c.Param("id")
+	var user user
+	err = collection.FindOne(context.TODO(), bson.M{"id": id}).Decode(&user)
+	if err != nil {
+		panic(err)
+	}
+	c.IndentedJSON(http.StatusOK, user)
+}
+
 func main() {
 
 	router := gin.Default()
@@ -158,5 +185,6 @@ func main() {
 	router.POST("/users", createUser)
 	router.PUT("/users/:id", updateUser)
 	router.DELETE("/users/:id", deleteUser)
+	router.GET("/users/:id", getUser)
 	router.Run(":8080")
 }

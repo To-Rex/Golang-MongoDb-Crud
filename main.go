@@ -95,29 +95,60 @@ func getUsers(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, users)
 }
 
-func updateUser(c *gin.Context) {
-	id := c.Param("id")
-	var updatedUser user
-	if err := c.BindJSON(&updatedUser); err != nil {
-		return
+func deleteUser(c *gin.Context) {
+	//delete user from db
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
+	if err != nil {
+		panic(err)
 	}
-	for i, a := range users {
-		if a.ID == id {
-			users[i] = updatedUser
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
 		}
+	}()
+	// Ping the primary
+	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
+		panic(err)
 	}
-	c.IndentedJSON(http.StatusOK, updatedUser)
+	//delete users
+	collection := client.Database("student").Collection("users")
+	//delete user from collection users
+	id := c.Param("id")
+	deleteResult, err := collection.DeleteOne(context.TODO(), bson.M{"id": id})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Deleted %v documents in the trainers collection )", deleteResult.DeletedCount)
 }
 
-func deleteUser(c *gin.Context) {
-	id := c.Param("id")
-	for i, a := range users {
-		if a.ID == id {
-			users = append(users[:i], users[i+1:]...)
-			break
-		}
+func updateUser(c *gin.Context) {
+	//update user from db
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
+	if err != nil {
+		panic(err)
 	}
-	c.IndentedJSON(http.StatusOK, users)
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	// Ping the primary
+	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
+		panic(err)
+	}
+	//update users
+	collection := client.Database("student").Collection("users")
+	//update user from collection users
+	id := c.Param("id")
+	var updateUser user
+	if err := c.BindJSON(&updateUser); err != nil {
+		return
+	}
+	updateResult, err := collection.UpdateOne(context.TODO(), bson.M{"id": id}, bson.M{"$set": updateUser})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
 }
 
 func main() {

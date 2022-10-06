@@ -31,7 +31,7 @@ func main() {
 
 	r.POST("/login", login)
 	r.POST("/register", register)
-	r.GET("/home", home)
+	r.GET("/getuser", home)
 
 	r.Run()
 }
@@ -116,10 +116,6 @@ func home(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
-	//c.JSON(http.StatusOK, gin.H{"data": "Welcome home"})
-	//get username from token
-	//get user from db
-	//return user
 	var user User
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -146,7 +142,6 @@ func home(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, user)
-
 }
 
 func createToken(username string) string {

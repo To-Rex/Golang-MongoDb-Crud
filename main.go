@@ -3,188 +3,129 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"net/http"
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 const uri = "mongodb+srv://root:1234@cluster0.ik76ncs.mongodb.net/?retryWrites=true&w=majority"
 
-type user struct {
-	ID    string `json:"id"`
-	Name string `json:"name"`
-	Surname string `json:"surname"`
-	Email string `json:"email"`
+type User struct {
+	Username string `json:"username"`
 	Password string `json:"password"`
-	Age  int `json:"age"`
+	Token	string `json:"token"`
 }
 
-var users = []user{
-	{ID: "1", Name: "John", Surname: "Doe", Email: "", Password: "dev.dilshodjon@gmail.com", Age: 20},
-}
-
-
-func createUser(c *gin.Context) {
-	var newUser user
-	if err := c.BindJSON(&newUser); err != nil {
-		return
-	}
-	users = append(users, newUser)
-	c.IndentedJSON(http.StatusCreated, newUser)
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Ping the primary
-	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
-		panic(err)
-	}
-	//create users
-	collection := client.Database("student").Collection("users")
-	//insert user into collection users
-	insertResult, err := collection.InsertOne(context.TODO(), newUser)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Inserted a single document: ", insertResult.InsertedID)
-}
-//get users from db and return users as json
-func getUsers(c *gin.Context) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Ping the primary
-	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
-		panic(err)
-	}
-	//create users
-	collection := client.Database("student").Collection("users")
-	//insert user into collection users
-	var users []user
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		panic(err)
-	}
-	for cur.Next(context.TODO()) {
-		var elem user
-		err := cur.Decode(&elem)
-		if err != nil {
-			panic(err)
-		}
-		users = append(users, elem)
-	}
-	if err := cur.Err(); err != nil {
-		panic(err)
-	}
-	cur.Close(context.TODO())
-	c.IndentedJSON(http.StatusOK, users)
-}
-
-func deleteUser(c *gin.Context) {
-	//delete user from db
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Ping the primary
-	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
-		panic(err)
-	}
-	//delete users
-	collection := client.Database("student").Collection("users")
-	//delete user from collection users
-	id := c.Param("id")
-	deleteResult, err := collection.DeleteOne(context.TODO(), bson.M{"id": id})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Deleted %v documents in the trainers collection )", deleteResult.DeletedCount)
-}
-
-func updateUser(c *gin.Context) {
-	//update user from db
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Ping the primary
-	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
-		panic(err)
-	}
-	//update users
-	collection := client.Database("student").Collection("users")
-	//update user from collection users
-	id := c.Param("id")
-	var updateUser user
-	if err := c.BindJSON(&updateUser); err != nil {
-		return
-	}
-	updateResult, err := collection.UpdateOne(context.TODO(), bson.M{"id": id}, bson.M{"$set": updateUser})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
-}
-
-//get one user from db and return user as json
-func getUser(c *gin.Context) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Ping the primary
-	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
-		panic(err)
-	}
-	//create users
-	collection := client.Database("student").Collection("users")
-	//insert user into collection users
-	id := c.Param("id")
-	var user user
-	err = collection.FindOne(context.TODO(), bson.M{"id": id}).Decode(&user)
-	if err != nil {
-		panic(err)
-	}
-	c.IndentedJSON(http.StatusOK, user)
+type Token struct {
+	Token string `json:"token"`
 }
 
 func main() {
+	r := gin.Default()
 
-	router := gin.Default()
-	router.GET("/users", getUsers)
-	router.POST("/users", createUser)
-	router.PUT("/users/:id", updateUser)
-	router.DELETE("/users/:id", deleteUser)
-	router.GET("/users/:id", getUser)
-	router.Run(":8080")
+	r.POST("/login", login)
+	r.POST("/register", register)
+	r.GET("/home", home)
+
+	r.Run()
+}
+
+func login(c *gin.Context) {
+	var user User
+	var token Token
+
+	c.BindJSON(&user)
+
+	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	collection := client.Database("test").Collection("users")
+
+	filter := bson.M{"username": user.Username, "password": user.Password}
+
+	err = collection.FindOne(context.Background(), filter).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	token.Token = createToken(user.Username)
+	c.JSON(http.StatusOK, token)
+}
+
+func register(c *gin.Context) {
+	var user User
+
+	c.BindJSON(&user)
+
+	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	collection := client.Database("test").Collection("users")
+
+	user.Token = createToken(user.Username)
+	_, err = collection.InsertOne(context.Background(), user)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"data": "User created"})
+}
+
+func home(c *gin.Context) {
+	token := c.Request.Header.Get("Authorization")
+	token = token[7:len(token)]
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("SECRET")), nil
+	})
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": "Home"})
+}
+
+func createToken(username string) string {
+	claims := jwt.MapClaims{}
+	claims["authorized"] = true
+	claims["username"] = username
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, _ := token.SignedString([]byte(os.Getenv("SECRET")))
+	return tokenString
 }

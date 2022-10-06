@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -117,8 +116,37 @@ func home(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
+	//c.JSON(http.StatusOK, gin.H{"data": "Welcome home"})
+	//get username from token
+	//get user from db
+	//return user
+	var user User
+	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
+	if err != nil {
+		fmt.Println(err)
+	}
 
-	c.JSON(http.StatusOK, gin.H{"data": "Home"})
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	collection := client.Database("test").Collection("users")
+
+	filter := bson.M{"username": claims["username"]}
+	err = collection.FindOne(context.Background(), filter).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+
 }
 
 func createToken(username string) string {
